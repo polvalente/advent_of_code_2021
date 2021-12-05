@@ -1,0 +1,13 @@
+<!-- vim: syntax=markdown -->
+
+# Advent of Code 2021
+
+## Index
+
+Requires Livebook v0.3+.
+
+* [Day 1](day_01.livemd)
+* [Day 2](day_02.livemd)
+* [Day 3](day_03.livemd)
+* [Day 4](day_04.livemd)
+* [Day 5](day_05.livemd)
