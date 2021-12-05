@@ -13,8 +13,9 @@ Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
 ```
 
 ```elixir
-{:ok, contents} = File.read("day1_input.txt")
+{:ok, contents} = File.read("inputs/day_1.txt")
 
+# Load input into an Nx.Tensor
 input =
   contents
   |> String.split("\n", trim: true)
@@ -30,9 +31,16 @@ input =
 ```
 
 ```elixir
+# We need to reshape into a 3D tensor so Nx.conv doesn't complain.
 input
 |> Nx.reshape({1, 1, Nx.size(input)})
+# The operation will effectively calculate a sliding window of x[i] - x[i - 1]
+# for i in 1..(Nx.size(input) - 1)
 |> Nx.conv(Nx.tensor([[[-1, 1]]]), strides: [1])
+# With this result, we can count all positive values, which
+# means there was an increase in the value. Nx.greater will
+# return a 1D Tensor of 0s and 1s and Nx.sum will count the
+# 1 elements.
 |> Nx.greater(0)
 |> Nx.sum()
 |> Nx.to_scalar()
@@ -45,6 +53,8 @@ input
 ## Part Two
 
 ```elixir
+# For part 2, we need to use a sliding window of size 3
+# for summing the input before we can apply the same process as above
 input
 |> Nx.window_sum({3})
 |> Nx.reshape({1, 1, Nx.size(input) - 2})

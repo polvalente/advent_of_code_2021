@@ -7,28 +7,33 @@ Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
 ```
 
 ```elixir
-{:ok, contents} = File.read("day_2_input_part_1.txt")
+{:ok, contents} = File.read("inputs/day_2.txt")
+# First, we split all lines
+contents
+|> String.split("\n", trim: true)
+|> Enum.map(fn line ->
+  # For each line, we will split the commands and match over them.
+  # Since down and up affect one degree of freedom and forward affects another,
+  # we can represent them as different "coordinates" on the tensor.
+  line
+  |> String.split(" ", trim: true)
+  |> case do
+    ["forward", n] ->
+      Nx.tensor([String.to_integer(n), 0])
 
-input =
-  contents
-  |> String.split("\n", trim: true)
-  |> Enum.map(fn line ->
-    line
-    |> String.split(" ", trim: true)
-    |> case do
-      ["forward", n] ->
-        Nx.tensor([String.to_integer(n), 0])
+    ["down", n] ->
+      Nx.tensor([0, String.to_integer(n)])
 
-      ["down", n] ->
-        Nx.tensor([0, String.to_integer(n)])
-
-      ["up", n] ->
-        Nx.tensor([0, -String.to_integer(n)])
-    end
-  end)
-  |> Nx.stack()
-  |> Nx.sum(axes: [0])
-  |> Nx.product()
+    ["up", n] ->
+      Nx.tensor([0, -String.to_integer(n)])
+  end
+end)
+# Since we need to sum each column, we just need to build a {n-lines, 2} tensor
+# and apply Nx.sum along the first axis
+|> Nx.stack()
+|> Nx.sum(axes: [0])
+# Finally we multiply the 2 resulting numbers
+|> Nx.product()
 ```
 
 ## Part 2
@@ -42,6 +47,10 @@ contents
   line
   |> String.split(" ", trim: true)
   |> case do
+    # The overall process is the same as the previous one.
+    # However, due to aim affecting the other 2 degrees of freedom,
+    # the easier way is to be more "elixir-like". TBH I just kept
+    # Nx due to copy/paste
     ["forward", n] ->
       val = String.to_integer(n)
 

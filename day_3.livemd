@@ -12,9 +12,10 @@ Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
 # gamma_rate bits = most common bits in each column
 # epsilon_rate bits = least common bits in each column
 
-{:ok, contents} = File.read("day_3_input.txt")
+{:ok, contents} = File.read("inputs/day_3.txt")
 
-tensor =
+%{shape: {rows, cols}} =
+  tensor =
   contents
   |> String.split("\n", trim: true)
   |> Enum.map(fn row ->
@@ -23,16 +24,19 @@ tensor =
   |> Nx.stack()
 
 # To find the most common bits, we need to sum each column and then compare to the length/2
+# this will effectively return 1 if 1 is the most common bit for each column (if we compare with Nx.greater/2)
 
-cutoff = tensor.shape |> elem(0) |> div(2)
+cutoff = div(rows, 2)
 
-places = Nx.power(2, Nx.subtract(11, Nx.iota({12})))
+# This will help us convert bits to numbers afterwards
+places = Nx.power(2, Nx.subtract(cols - 1, Nx.iota({cols})))
 
 gamma_bits =
   tensor
   |> Nx.sum(axes: [0])
   |> Nx.greater(cutoff)
 
+# epsilon == !gamma
 epsilon_bits = Nx.equal(0, gamma_bits)
 
 gamma = Nx.dot(gamma_bits, places)
@@ -77,7 +81,7 @@ power = Nx.multiply(gamma, epsilon)
 l =
   tensor
   |> Nx.to_flat_list()
-  |> Enum.chunk_every(elem(tensor.shape, 1))
+  |> Enum.chunk_every(cols)
 
 o2 =
   0..elem(tensor.shape, 1)

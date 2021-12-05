@@ -5,7 +5,7 @@
 ```elixir
 Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
 
-{:ok, contents} = File.read("day4_input.txt")
+{:ok, contents} = File.read("inputs/day_4.txt")
 
 # contents = """
 # 7,4,9,5,11,17,23,2,0,14,21,24,10,16,13,6,15,25,12,22,18,20,8,19,3,26,1
@@ -55,6 +55,8 @@ neg_ones = Nx.broadcast(-1, {5, 5})
       Enum.map(boards, fn board ->
         selector = Nx.equal(board, number)
 
+        # Replace the marked number with -1.
+        # This will make sense in the Enum.find below
         Nx.select(selector, neg_ones, board)
       end)
 
@@ -62,6 +64,9 @@ neg_ones = Nx.broadcast(-1, {5, 5})
 
     found =
       Enum.find(boards, fn board ->
+        # The sum over a given column or row will only be -5
+        # if all elements are -1, which only occur when we mark
+        # a number as taken.
         col = board |> Nx.sum(axes: [0]) |> Nx.equal(-5) |> Nx.any?() |> Nx.to_scalar()
         row = board |> Nx.sum(axes: [1]) |> Nx.equal(-5) |> Nx.any?() |> Nx.to_scalar()
 
@@ -93,6 +98,7 @@ neg_ones = Nx.broadcast(-1, {5, 5})
 {found, number} =
   Enum.reduce_while(numbers, boards, fn
     number, [board] ->
+      # We found the board, but haven't marked the number yet.
       {:halt, {board, number}}
 
     number, boards ->
@@ -103,6 +109,9 @@ neg_ones = Nx.broadcast(-1, {5, 5})
         Nx.select(selector, neg_ones, board)
       end)
       |> Enum.reject(fn board ->
+        # Remove each board that has won from the list.
+        # When we're left with a single board, it'll be
+        # the one we want.
         col = board |> Nx.sum(axes: [0]) |> Nx.equal(-5) |> Nx.any?() |> Nx.to_scalar()
         row = board |> Nx.sum(axes: [1]) |> Nx.equal(-5) |> Nx.any?() |> Nx.to_scalar()
 
@@ -111,14 +120,14 @@ neg_ones = Nx.broadcast(-1, {5, 5})
       |> then(fn b -> {:cont, b} end)
   end)
 
-IO.inspect(found, label: "found")
-IO.inspect(number, label: "number")
-
 found
+# Find all marked positions and turn them into 0
 |> Nx.not_equal(-1)
 |> Nx.multiply(found)
+# Sum all non-marked positions
 |> Nx.sum()
+# Subtract the current number, which is the same as marking it beforehand
 |> Nx.subtract(number)
-|> IO.inspect()
+# Multiply
 |> Nx.multiply(number)
 ```
