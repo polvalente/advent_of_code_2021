@@ -1,0 +1,238 @@
+# Day 3
+
+## Section
+
+```elixir
+Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
+```
+
+```elixir
+# power_consumption = gamma_rate * epsilon_rate
+
+# gamma_rate bits = most common bits in each column
+# epsilon_rate bits = least common bits in each column
+
+{:ok, contents} = File.read("day_3_input.txt")
+
+tensor =
+  contents
+  |> String.split("\n", trim: true)
+  |> Enum.map(fn row ->
+    row |> String.split("", trim: true) |> Enum.map(&String.to_integer/1) |> Nx.tensor()
+  end)
+  |> Nx.stack()
+
+# To find the most common bits, we need to sum each column and then compare to the length/2
+
+cutoff = tensor.shape |> elem(0) |> div(2)
+
+places = Nx.power(2, Nx.subtract(11, Nx.iota({12})))
+
+gamma_bits =
+  tensor
+  |> Nx.sum(axes: [0])
+  |> Nx.greater(cutoff)
+
+epsilon_bits = Nx.equal(0, gamma_bits)
+
+gamma = Nx.dot(gamma_bits, places)
+epsilon = Nx.dot(epsilon_bits, places)
+
+power = Nx.multiply(gamma, epsilon)
+```
+
+## Part 2
+
+```elixir
+# power_consumption = gamma_rate * epsilon_rate
+
+# gamma_rate bits = most common bits in each column
+# epsilon_rate bits = least common bits in each column
+
+# To find oxygen generator rating, determine the 
+# most common value (0 or 1) in the current bit position, 
+# and keep only numbers with that bit in that position. 
+# If 0 and 1 are equally common, keep values with a 1 in the position being considered.
+
+# tensor =
+#   ~w[
+#     00100
+#     11110
+#     10110
+#     10111
+#     10101
+#     01111
+#     00111
+#     11100
+#     10000
+#     11001
+#     00010
+#     01010
+#   ]
+#   |> Enum.map(&(&1 |> String.split("", trim: true) |> Enum.map(fn x -> String.to_integer(x) end)))
+#   |> Nx.tensor()
+
+# places = Nx.power(2, Nx.subtract(4, Nx.iota({5})))
+
+l =
+  tensor
+  |> Nx.to_flat_list()
+  |> Enum.chunk_every(elem(tensor.shape, 1))
+
+o2 =
+  0..elem(tensor.shape, 1)
+  |> Enum.reduce_while(l, fn index, l ->
+    bit =
+      l
+      |> Nx.tensor()
+      |> then(fn %{shape: {rows, _}} = tensor ->
+        cutoff = ceil(rows / 2)
+
+        tensor
+        |> Nx.sum(axes: [0])
+        |> Nx.greater_equal(cutoff)
+      end)
+      |> Nx.to_flat_list()
+      |> Enum.at(index)
+
+    l
+    |> Enum.filter(fn row -> Enum.at(row, index) == bit end)
+    |> case do
+      [number] ->
+        {:halt, number}
+
+      val ->
+        {:cont, val}
+    end
+  end)
+  |> Nx.tensor()
+  |> Nx.dot(places)
+
+co2 =
+  0..elem(tensor.shape, 1)
+  |> Enum.reduce_while(l, fn index, l ->
+    bit =
+      l
+      |> Nx.tensor()
+      |> then(fn %{shape: {rows, _}} = tensor ->
+        cutoff = ceil(rows / 2)
+
+        tensor
+        |> Nx.sum(axes: [0])
+        |> Nx.less(cutoff)
+      end)
+      |> Nx.to_flat_list()
+      |> Enum.at(index)
+
+    l
+    |> Enum.filter(fn row -> Enum.at(row, index) == bit end)
+    |> case do
+      [number] ->
+        {:halt, number}
+
+      val ->
+        {:cont, val}
+    end
+  end)
+  |> Nx.tensor()
+  |> Nx.dot(places)
+
+Nx.multiply(co2, o2)
+```
+
+```elixir
+# power_consumption = gamma_rate * epsilon_rate
+
+# gamma_rate bits = most common bits in each column
+# epsilon_rate bits = least common bits in each column
+
+# To find oxygen generator rating, determine the 
+# most common value (0 or 1) in the current bit position, 
+# and keep only numbers with that bit in that position. 
+# If 0 and 1 are equally common, keep values with a 1 in the position being considered.
+
+# tensor =
+#   ~w[
+#     00100
+#     11110
+#     10110
+#     10111
+#     10101
+#     01111
+#     00111
+#     11100
+#     10000
+#     11001
+#     00010
+#     01010
+#   ]
+#   |> Enum.map(&(&1 |> String.split("", trim: true) |> Enum.map(fn x -> String.to_integer(x) end)))
+#   |> Nx.tensor()
+
+# places = Nx.power(2, Nx.subtract(4, Nx.iota({5})))
+
+l =
+  tensor
+  |> Nx.to_flat_list()
+  |> Enum.chunk_every(elem(tensor.shape, 1))
+
+o2 =
+  0..elem(tensor.shape, 1)
+  |> Enum.reduce_while(l, fn index, l ->
+    bit =
+      l
+      |> Nx.tensor()
+      |> then(fn %{shape: {rows, _}} = tensor ->
+        cutoff = ceil(rows / 2)
+
+        tensor
+        |> Nx.sum(axes: [0])
+        |> Nx.greater_equal(cutoff)
+      end)
+      |> Nx.to_flat_list()
+      |> Enum.at(index)
+
+    l
+    |> Enum.filter(fn row -> Enum.at(row, index) == bit end)
+    |> case do
+      [number] ->
+        {:halt, number}
+
+      val ->
+        {:cont, val}
+    end
+  end)
+  |> Nx.tensor()
+  |> Nx.dot(places)
+
+co2 =
+  0..elem(tensor.shape, 1)
+  |> Enum.reduce_while(l, fn index, l ->
+    bit =
+      l
+      |> Nx.tensor()
+      |> then(fn %{shape: {rows, _}} = tensor ->
+        cutoff = ceil(rows / 2)
+
+        tensor
+        |> Nx.sum(axes: [0])
+        |> Nx.less(cutoff)
+      end)
+      |> Nx.to_flat_list()
+      |> Enum.at(index)
+
+    l
+    |> Enum.filter(fn row -> Enum.at(row, index) == bit end)
+    |> case do
+      [number] ->
+        {:halt, number}
+
+      val ->
+        {:cont, val}
+    end
+  end)
+  |> Nx.tensor()
+  |> Nx.dot(places)
+
+Nx.multiply(co2, o2)
+```

@@ -1,0 +1,61 @@
+# Untitled notebook
+
+## Section
+
+```elixir
+Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
+```
+
+```elixir
+{:ok, contents} = File.read("day_2_input_part_1.txt")
+
+input =
+  contents
+  |> String.split("\n", trim: true)
+  |> Enum.map(fn line ->
+    line
+    |> String.split(" ", trim: true)
+    |> case do
+      ["forward", n] ->
+        Nx.tensor([String.to_integer(n), 0])
+
+      ["down", n] ->
+        Nx.tensor([0, String.to_integer(n)])
+
+      ["up", n] ->
+        Nx.tensor([0, -String.to_integer(n)])
+    end
+  end)
+  |> Nx.stack()
+  |> Nx.sum(axes: [0])
+  |> Nx.product()
+```
+
+## Part 2
+
+```elixir
+contents
+|> String.split("\n", trim: true)
+|> Enum.reduce(Nx.tensor([0, 0, 0]), fn line, tensor ->
+  aim = tensor[2]
+
+  line
+  |> String.split(" ", trim: true)
+  |> case do
+    ["forward", n] ->
+      val = String.to_integer(n)
+
+      tensor
+      |> Nx.add(aim |> Nx.multiply(val) |> Nx.multiply(Nx.tensor([0, 1, 0])))
+      |> Nx.add(Nx.tensor([val, 0, 0]))
+
+    ["down", n] ->
+      Nx.tensor([0, 0, String.to_integer(n)]) |> Nx.add(tensor)
+
+    ["up", n] ->
+      Nx.tensor([0, 0, -String.to_integer(n)]) |> Nx.add(tensor)
+  end
+end)
+|> then(fn t -> Nx.multiply(t[0], t[1]) end)
+|> Nx.to_scalar()
+```

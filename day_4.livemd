@@ -1,0 +1,124 @@
+# Day 4
+
+## Part 1
+
+```elixir
+Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
+
+{:ok, contents} = File.read("day4_input.txt")
+
+# contents = """
+# 7,4,9,5,11,17,23,2,0,14,21,24,10,16,13,6,15,25,12,22,18,20,8,19,3,26,1
+
+# 22 13 17 11  0
+#  8  2 23  4 24
+# 21  9 14 16  7
+#  6 10  3 18  5
+#  1 12 20 15 19
+
+#  3 15  0  2 22
+#  9 18 13 17  5
+# 19  8  7 25 23
+# 20 11 10 24  4
+# 14 21 16 12  6
+
+# 14 21 17 24  4
+# 10 16 15  9 19
+# 18  8 23 26 20
+# 22 11 13  6  5
+#  2  0 12  3  7
+# """
+
+[numbers | boards] = String.split(contents, "\n", trim: true)
+
+numbers = numbers |> String.split(",", trim: true) |> Enum.map(&String.to_integer/1)
+
+boards =
+  boards
+  |> Enum.flat_map(fn row ->
+    row |> String.split(" ", trim: true) |> Enum.map(&String.to_integer/1)
+  end)
+  |> Nx.tensor()
+  |> then(fn %{shape: {n}} = t ->
+    Nx.reshape(t, {div(n, 25), 5, 5})
+  end)
+  |> Nx.to_batched_list(1)
+  |> Enum.map(&Nx.reshape(&1, {5, 5}))
+```
+
+```elixir
+neg_ones = Nx.broadcast(-1, {5, 5})
+
+{found, number} =
+  Enum.reduce_while(numbers, boards, fn number, boards ->
+    boards =
+      Enum.map(boards, fn board ->
+        selector = Nx.equal(board, number)
+
+        Nx.select(selector, neg_ones, board)
+      end)
+
+    # |> IO.inspect(label: "boards @ #{number}")
+
+    found =
+      Enum.find(boards, fn board ->
+        col = board |> Nx.sum(axes: [0]) |> Nx.equal(-5) |> Nx.any?() |> Nx.to_scalar()
+        row = board |> Nx.sum(axes: [1]) |> Nx.equal(-5) |> Nx.any?() |> Nx.to_scalar()
+
+        col == 1 or row == 1
+      end)
+
+    if found do
+      {:halt, {found, number}}
+    else
+      {:cont, boards}
+    end
+  end)
+
+# IO.inspect(found, label: "found")
+# IO.inspect(number, label: "number")
+
+found
+|> Nx.not_equal(-1)
+|> Nx.multiply(found)
+|> Nx.sum()
+|> Nx.multiply(number)
+```
+
+## Part 2
+
+```elixir
+neg_ones = Nx.broadcast(-1, {5, 5})
+
+{found, number} =
+  Enum.reduce_while(numbers, boards, fn
+    number, [board] ->
+      {:halt, {board, number}}
+
+    number, boards ->
+      boards
+      |> Enum.map(fn board ->
+        selector = Nx.equal(board, number)
+
+        Nx.select(selector, neg_ones, board)
+      end)
+      |> Enum.reject(fn board ->
+        col = board |> Nx.sum(axes: [0]) |> Nx.equal(-5) |> Nx.any?() |> Nx.to_scalar()
+        row = board |> Nx.sum(axes: [1]) |> Nx.equal(-5) |> Nx.any?() |> Nx.to_scalar()
+
+        col == 1 or row == 1
+      end)
+      |> then(fn b -> {:cont, b} end)
+  end)
+
+IO.inspect(found, label: "found")
+IO.inspect(number, label: "number")
+
+found
+|> Nx.not_equal(-1)
+|> Nx.multiply(found)
+|> Nx.sum()
+|> Nx.subtract(number)
+|> IO.inspect()
+|> Nx.multiply(number)
+```
