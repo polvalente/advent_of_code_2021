@@ -1,0 +1,94 @@
+# Day 6
+
+## Part 1
+
+```elixir
+Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
+```
+
+```elixir
+{:ok, contents} = File.read("inputs/day_6.txt")
+
+# contents = """
+# 3,4,3,1,2
+# """
+
+input =
+  contents
+  |> String.trim()
+  |> String.split(",", trim: true)
+  |> Enum.map(&String.to_integer/1)
+  |> Nx.tensor()
+```
+
+```elixir
+days = 80
+
+for day <- 1..days, reduce: input do
+  t ->
+    selector = Nx.equal(t, 0)
+
+    count = selector |> Nx.sum() |> Nx.to_scalar()
+
+    result = Nx.select(selector, 7, t)
+
+    if count > 0 do
+      Nx.concatenate([result, Nx.broadcast(9, {count})])
+    else
+      result
+    end
+    |> Nx.subtract(1)
+end
+```
+
+## Part 2
+
+```elixir
+# The Nx version was too complex in memory, so this one is better.
+# Next I'll try to refactor it into an Nx solution
+
+counts =
+  for i <- 0..8, reduce: %{} do
+    counts ->
+      Map.put(counts, i, input |> Nx.equal(i) |> Nx.sum() |> Nx.to_scalar())
+  end
+
+for _ <- 1..256, reduce: counts do
+  counts ->
+    zeros = counts[0] || 0
+    counts = Map.put(counts, 7, zeros + (counts[7] || 0))
+    counts = Map.put(counts, 9, (counts[9] || 0) + zeros)
+
+    for i <- 0..9, reduce: %{} do
+      acc -> Map.put(acc, i, counts[i + 1] || 0)
+    end
+end
+|> Map.values()
+|> Enum.sum()
+```
+
+```elixir
+# Same idea as above, but instead of accumulating on a map, we
+# have each index in the tensor represent the timer count
+
+counts =
+  for i <- 0..9 do
+    input |> Nx.equal(i) |> Nx.sum()
+  end
+  |> Nx.stack()
+
+for _ <- 1..256, reduce: counts do
+  t ->
+    zeros = t[0]
+
+    [
+      t
+      |> Nx.indexed_add(Nx.tensor([[7]]), Nx.reshape(zeros, {1}))
+      |> Nx.indexed_add(Nx.tensor([[9]]), Nx.reshape(zeros, {1}))
+      |> Nx.slice([1], [9]),
+      Nx.tensor([0])
+    ]
+    |> Nx.concatenate()
+end
+|> Nx.sum()
+```
