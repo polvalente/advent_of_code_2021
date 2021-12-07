@@ -1,0 +1,61 @@
+# Day 7
+
+## Part 1
+
+```elixir
+Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
+```
+
+```elixir
+{:ok, contents} = File.read("inputs/day_7.txt")
+
+input = contents |> String.split(",", trim: true) |> Enum.map(&String.to_integer/1)
+tensor = Nx.tensor(input)
+```
+
+```elixir
+for pos <- input |> Enum.uniq() |> Enum.sort(), reduce: nil do
+  nil ->
+    fuel = Nx.subtract(tensor, pos) |> Nx.abs() |> Nx.sum() |> Nx.to_number()
+    {pos, fuel}
+
+  {prev_pos, prev_fuel} ->
+    fuel = Nx.subtract(tensor, pos) |> Nx.abs() |> Nx.sum() |> Nx.to_number()
+
+    if fuel < prev_fuel do
+      # IO.inspect({{prev_pos, prev_fuel}, {pos, fuel}}, label: "{{prev_pos, prev_fuel}, {pos, fuel}}")
+      {pos, fuel}
+    else
+      {prev_pos, prev_fuel}
+    end
+end
+```
+
+```elixir
+calculate_fuel = fn tensor, pos ->
+  tensor
+  |> Nx.subtract(pos)
+  |> Nx.abs()
+  |> Nx.map(fn x ->
+    1..Nx.to_number(x)//1 |> Enum.sum() |> Nx.tensor()
+  end)
+  |> Nx.sum()
+  |> Nx.to_number()
+end
+
+for pos <- 0..Enum.max(input), reduce: nil do
+  nil ->
+    fuel = calculate_fuel.(tensor, pos)
+    {pos, fuel}
+
+  {prev_pos, prev_fuel} ->
+    fuel = calculate_fuel.(tensor, pos)
+
+    if fuel < prev_fuel do
+      {pos, fuel}
+    else
+      {prev_pos, prev_fuel}
+    end
+end
+|> elem(1)
+```

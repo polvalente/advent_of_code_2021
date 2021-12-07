@@ -22,6 +22,38 @@ input =
 ```
 
 ```elixir
+frequencies = input |> Nx.to_flat_list() |> Enum.frequencies() |> IO.inspect()
+tensor = Nx.tensor(Enum.map(0..5, fn i -> frequencies[i] || 0 end)) |> IO.inspect()
+
+import Nx
+
+matrix = ~M"""
+0 0 0 0 0 0 1 0 1
+1 0 0 0 0 0 0 0 0
+0 1 0 0 0 0 0 0 0
+0 0 1 0 0 0 0 0 0
+0 0 0 1 0 0 0 0 0
+0 0 0 0 1 0 0 0 0
+0 0 0 0 0 1 0 0 0
+0 0 0 0 0 0 1 0 0
+0 0 0 0 0 0 0 1 0
+"""
+
+# Nx.iota({9})
+Nx.dot(Nx.iota({9}) |> Nx.add(2) |> IO.inspect(), matrix)
+
+# final =
+#   1..255
+#   |> Enum.reduce(matrix, fn _, acc ->
+#     Nx.dot(matrix, acc)
+#   end)
+#   |> Nx.sum(axes: [1])
+#   |> IO.inspect()
+
+# Nx.dot(tensor, final[0..5])
+```
+
+```elixir
 days = 80
 
 for day <- 1..days, reduce: input do
