@@ -1,0 +1,225 @@
+# Day 8
+
+## Part 1
+
+```elixir
+Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
+```
+
+```elixir
+defmodule Decoder do
+  @moduledoc """
+  Decodes the input to find each digit
+  """
+
+  def one?(digits), do: MapSet.size(digits) == 2
+  def four?(digits), do: MapSet.size(digits) == 4
+  def seven?(digits), do: MapSet.size(digits) == 3
+  def eight?(digits), do: MapSet.size(digits) == 7
+
+  def digits_from_one_four(one, four) do
+    cf = MapSet.intersection(one, four)
+
+    bd = MapSet.difference(four, one)
+
+    %{cf: cf, bd: bd}
+  end
+
+  def digits_from_one_seven(one, seven) do
+    cf = MapSet.intersection(one, seven)
+
+    a = MapSet.difference(seven, one)
+
+    %{cf: cf, a: a}
+  end
+
+  def parse_input(input) do
+    for line <- String.split(input, "\n", trim: true) do
+      [test, output] = String.split(line, "|", trim: true)
+
+      {split_input(test), split_input(output)}
+    end
+    |> Enum.unzip()
+  end
+
+  defp split_input(str) do
+    str
+    |> String.split(" ", trim: true)
+    |> Enum.map(&(&1 |> String.split("", trim: true) |> MapSet.new()))
+  end
+end
+```
+
+```elixir
+input = "acedgfb cdfbe gcdfa fbcad dab cefabd cdfgeb eafb cagedb ab |
+cdfeb fcadb cdfeb cdbaf"
+
+{:ok, content} = File.read("inputs/day_8.txt")
+
+# content = """
+# be cfbegad cbdgef fgaecd cgeb fdcge agebfd fecdb fabcd edb | fdgacbe cefdb cefbgd gcbe
+# edbfga begcd cbg gc gcadebf fbgde acbgfd abcde gfcbed gfec | fcgedb cgb dgebacf gc
+# fgaebd cg bdaec gdafb agbcfd gdcbef bgcad gfac gcb cdgabef | cg cg fdcagb cbg
+# fbegcd cbd adcefb dageb afcb bc aefdc ecdab fgdeca fcdbega | efabcd cedba gadfec cb
+# aecbfdg fbg gf bafeg dbefa fcge gcbea fcaegb dgceab fcbdga | gecf egdcabf bgf bfgea
+# fgeab ca afcebg bdacfeg cfaedg gcfdb baec bfadeg bafgc acf | gebdcfa ecba ca fadegcb
+# dbcfg fgd bdegcaf fgec aegbdf ecdfab fbedc dacgb gdcebf gf | cefg dcbef fcge gbcadfe
+# bdfegc cbegaf gecbf dfcage bdacg ed bedf ced adcbefg gebcd | ed bcgafe cdgba cbgef
+# egadfb cdbfeg cegd fecab cgb gbdefca cg fgcdab egfdb bfceg | gbdfcae bgc cg cgb
+# gcafb gcf dcaebfg ecagb gf abcdeg gaef cafbge fdbac fegbdc | fgae cfgab fg bagce
+# """
+
+{inputs, outputs} = Decoder.parse_input(content)
+
+outputs
+|> List.flatten()
+|> Enum.map(fn out ->
+  if Decoder.one?(out) or Decoder.four?(out) or Decoder.seven?(out) or Decoder.eight?(out) do
+    1
+  else
+    0
+  end
+end)
+|> Enum.sum()
+```
+
+## Part 2
+
+```elixir
+brute_force = fn ->
+  Enum.zip_with(inputs, outputs, fn
+    input, output ->
+      one = Enum.find(input, &Decoder.one?/1)
+      four = Enum.find(input, &Decoder.four?/1)
+      seven = Enum.find(input, &Decoder.seven?/1)
+      eight = Enum.find(input, &Decoder.eight?/1)
+
+      %{a: a, cf: cf} = Decoder.digits_from_one_seven(one, seven)
+      %{bd: bd, cf: ^cf} = Decoder.digits_from_one_four(one, four)
+
+      other_digits = input -- [one, four, seven, eight]
+
+      three =
+        Enum.find(other_digits, fn d ->
+          diff = MapSet.difference(d, seven)
+
+          MapSet.size(diff) == 2
+        end)
+
+      dg = MapSet.difference(three, seven)
+
+      g = MapSet.difference(dg, bd)
+      b = MapSet.difference(bd, dg)
+      d = MapSet.intersection(bd, dg)
+
+      # we have a, b, d, g defined, and cf grouped
+
+      # 5 is abdfg, so we can get f from it
+
+      other_digits = other_digits -- [three]
+
+      abdg = a |> MapSet.union(b) |> MapSet.union(d) |> MapSet.union(g)
+
+      # Other digits = [0, 2, 5, 6, 9]
+
+      [five] =
+        Enum.filter(other_digits, fn d ->
+          diff = MapSet.difference(d, abdg)
+
+          MapSet.size(diff) == 1
+        end)
+
+      f = MapSet.difference(five, abdg)
+
+      [two] = Enum.filter(other_digits -- [five], &(MapSet.size(&1) == 5))
+
+      ce = MapSet.difference(two, five)
+
+      # We have a, b, d, g, f + ce + cf
+
+      c = MapSet.intersection(ce, cf)
+
+      e = MapSet.difference(ce, c)
+
+      # Now we have all digits, so we can decode accordingly
+
+      zero = Enum.reduce([a, c, f, g, e, b], &MapSet.union/2)
+      one = Enum.reduce([c, f], &MapSet.union/2)
+      two = Enum.reduce([a, c, d, e, g], &MapSet.union/2)
+      three = Enum.reduce([a, c, d, f, g], &MapSet.union/2)
+      four = Enum.reduce([b, d, c, f], &MapSet.union/2)
+      five = Enum.reduce([a, b, d, f, g], &MapSet.union/2)
+      six = Enum.reduce([a, b, d, e, f, g], &MapSet.union/2)
+      seven = Enum.reduce([a, c, f], &MapSet.union/2)
+      eight = Enum.reduce([a, b, c, d, e, f, g], &MapSet.union/2)
+      nine = Enum.reduce([a, b, c, d, f, g], &MapSet.union/2)
+
+      output
+      |> Enum.map(fn digit ->
+        cond do
+          MapSet.equal?(zero, digit) -> 0
+          MapSet.equal?(one, digit) -> 1
+          MapSet.equal?(two, digit) -> 2
+          MapSet.equal?(three, digit) -> 3
+          MapSet.equal?(four, digit) -> 4
+          MapSet.equal?(five, digit) -> 5
+          MapSet.equal?(six, digit) -> 6
+          MapSet.equal?(seven, digit) -> 7
+          MapSet.equal?(eight, digit) -> 8
+          MapSet.equal?(nine, digit) -> 9
+        end
+      end)
+      |> Integer.undigits()
+  end)
+  |> Enum.sum()
+end
+```
+
+```elixir
+ciphertext_solution = fn ->
+  # Alternative solution which uses the fact that
+  # each digit has an unique combination of letters
+  # Since the scrambling is a bijective relationship,
+  # the frequencies for each wire of a given digit must
+  # remain the same and can be used to find the digit
+  # without determining which wire is which
+
+  digits = %{
+    0 => ~w(a b c e f g),
+    1 => ~w(c f),
+    2 => ~w(a c d e g),
+    3 => ~w(a c f d g),
+    4 => ~w(b c d f),
+    5 => ~w(a b d f g),
+    6 => ~w(a b d e f g),
+    7 => ~w(a c f),
+    8 => ~w(a b c d e f g),
+    9 => ~w(a b c d f g)
+  }
+
+  freqs = digits |> Map.values() |> List.flatten() |> Enum.frequencies()
+
+  weights_to_nums = Map.new(digits, fn {k, v} -> {v |> Enum.map(&freqs[&1]) |> Enum.sum(), k} end)
+
+  Enum.zip_with(inputs, outputs, fn input, output ->
+    freqs = input |> Enum.flat_map(&Enum.to_list/1) |> Enum.frequencies()
+
+    output
+    |> Enum.map(fn digit ->
+      weight =
+        digit
+        |> Enum.map(&freqs[&1])
+        |> Enum.sum()
+
+      weights_to_nums[weight]
+    end)
+    |> Integer.undigits()
+  end)
+  |> Enum.sum()
+end
+
+{_t1, result} = :timer.tc(brute_force) |> IO.inspect(label: "brute_force")
+{_t2, ^result} = :timer.tc(ciphertext_solution) |> IO.inspect(label: "ciphertext_solution")
+
+result
+```
