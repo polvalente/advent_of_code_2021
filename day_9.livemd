@@ -1,0 +1,85 @@
+# Day 9
+
+## Part 1
+
+```elixir
+nodes =
+  File.stream!("inputs/day_9.txt")
+  # """
+  # 2199943210
+  # 3987894921
+  # 9856789892
+  # 8767896789
+  # 9899965678
+  # """
+  # |> String.split("\n", trim: true)
+  |> Enum.with_index(fn line, row ->
+    line
+    |> String.trim()
+    |> String.split("", trim: true)
+    |> Enum.with_index(fn s, col -> {{row, col}, String.to_integer(s)} end)
+  end)
+  |> List.flatten()
+  |> Map.new()
+
+min_x = 0
+min_y = 0
+max_x = 99
+max_y = 99
+```
+
+```elixir
+neighbor_indices = fn x, y ->
+  Enum.filter([{x - 1, y}, {x + 1, y}, {x, y - 1}, {x, y + 1}], fn {x, y} ->
+    x in min_x..max_x and y in min_y..max_y
+  end)
+end
+
+low_points =
+  Enum.filter(nodes, fn {{x, y}, v} ->
+    Enum.all?(neighbor_indices.(x, y), fn k -> nodes[k] > v end)
+  end)
+
+total_weight = Enum.map(low_points, fn {_, v} -> v + 1 end) |> Enum.sum()
+```
+
+## Part 2
+
+```elixir
+basin_nodes =
+  Map.new(nodes, fn
+    {k, 9} -> {k, 0}
+    {k, _} -> {k, 1}
+  end)
+
+g = :digraph.new([:cyclic])
+
+graph =
+  Enum.reduce(basin_nodes, g, fn
+    {{x, y}, 1}, graph ->
+      :digraph.add_vertex(graph, {x, y}, [1])
+      graph
+
+    _, graph ->
+      graph
+  end)
+
+graph =
+  for {x, y} <- :digraph.vertices(graph), reduce: graph do
+    graph ->
+      for k <- neighbor_indices.(x, y), reduce: graph do
+        g ->
+          if basin_nodes[k] == 1 do
+            :digraph.add_edge(g, {x, y}, k)
+            g
+          else
+            g
+          end
+      end
+  end
+
+strong_components =
+  graph |> :digraph_utils.strong_components() |> Enum.map(&length/1) |> Enum.sort(:desc)
+
+strong_components |> Enum.take(3) |> Enum.product()
+```
