@@ -1,0 +1,93 @@
+# Day 11
+
+## Part 1
+
+```elixir
+Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
+```
+
+```elixir
+# """
+# 5483143223
+# 2745854711
+# 5264556173
+# 6141336146
+# 6357385478
+# 4167524645
+# 2176841721
+# 6882881134
+# 4846848554
+# 5283751526
+# """
+# """
+# 11111
+# 19991
+# 19191
+# 19991
+# 11111
+# """
+tensor =
+  "inputs/day_11.txt"
+  |> File.read!()
+  |> String.split("\n", trim: true)
+  |> Enum.map(fn line ->
+    line |> String.split("", trim: true) |> Enum.map(&String.to_integer/1)
+  end)
+  |> Nx.tensor()
+```
+
+```elixir
+flash_mask = fn t, can_flash ->
+  flashes = Nx.greater(t, 9) |> Nx.multiply(can_flash)
+
+  flash_mask = Nx.window_sum(flashes, {3, 3}, padding: :same)
+
+  can_flash = flashes |> Nx.logical_not() |> Nx.multiply(can_flash)
+
+  flash_count = flashes |> Nx.sum() |> Nx.to_scalar()
+
+  flashed = Nx.add(flash_mask, t)
+
+  {flashed, flash_count, can_flash}
+end
+
+iterate = fn tensor, flashes ->
+  increased = Nx.add(tensor, 1)
+
+  Enum.reduce_while(1..Nx.size(tensor), {increased, Nx.broadcast(1, increased), flashes}, fn _,
+                                                                                             {t,
+                                                                                              can_flash,
+                                                                                              prev_flash_count} ->
+    {flashed, flash_count, can_flash} = flash_mask.(t, can_flash)
+
+    if flash_count == 0 do
+      {:halt, {flashed |> Nx.less_equal(9) |> Nx.multiply(t), prev_flash_count}}
+    else
+      {:cont, {flashed, can_flash, flash_count + prev_flash_count}}
+    end
+  end)
+end
+
+for _ <- 1..100, reduce: {tensor, 0} do
+  {t, flashes} ->
+    iterate.(t, flashes)
+end
+```
+
+## Part 2
+
+```elixir
+total = Nx.size(tensor)
+
+[1]
+|> Stream.cycle()
+|> Enum.reduce_while({tensor, 0, 0}, fn _, {t, step, prev_flashes} ->
+  {t, flashes} = iterate.(t, prev_flashes)
+
+  if flashes - prev_flashes == total do
+    {:halt, {t, step + 1, flashes}}
+  else
+    {:cont, {t, step + 1, flashes}}
+  end
+end)
+```

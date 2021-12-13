@@ -1,0 +1,82 @@
+# Day 10
+
+## Part 1
+
+```elixir
+# check delimiter balancing
+
+input = File.stream!("inputs/day_10.txt") |> Enum.map(&String.trim/1)
+
+# input = """
+# [({(<(())[]>[[{[]{<()<>>
+# [(()[<>])]({[<{<<[]>>(
+# {([(<{}[<>[]}>{[]{[(<()>
+# (((({<>}<{<{<>}{[]{[]{}
+# [[<[([]))<([[{}[[()]]]
+# [{[{({}]{}}([{[{{{}}([]
+# {<[[]]>}<{[{[{[]{()[[[]
+# [<(<(<(<{}))><([]([]()
+# <{([([[(<>()){}]>(<<{{
+# <{([{{}}[<[[[<>{}]]]>[]]
+# """
+# |> String.split("\n", trim: true)
+
+validate_line = fn line ->
+  line
+  |> String.graphemes()
+  |> Enum.reduce_while([], fn
+    c, [] when c in ["(", "[", "{", "<"] -> {:cont, [c]}
+    c, [] when c in [")", "]", "}", ">"] -> {:halt, {:error, c}}
+    c, stack when c in ["(", "[", "{", "<"] -> {:cont, [c | stack]}
+    ")", [last | _] when last != "(" -> {:halt, {:error, ")"}}
+    "}", [last | _] when last != "{" -> {:halt, {:error, "}"}}
+    "]", [last | _] when last != "[" -> {:halt, {:error, "]"}}
+    ">", [last | _] when last != "<" -> {:halt, {:error, ">"}}
+    _, [_ | stack] -> {:cont, stack}
+  end)
+  |> case do
+    {:error, _} = err -> err
+    x -> {:ok, x}
+  end
+end
+
+validated = Enum.map(input, validate_line)
+
+corrupt =
+  validated
+  |> Keyword.take([:error])
+  |> Enum.map(fn
+    {_, "}"} -> 1197
+    {_, ")"} -> 3
+    {_, "]"} -> 57
+    {_, ">"} -> 25137
+  end)
+  |> Enum.sum()
+```
+
+## Part 2
+
+```elixir
+complete_line_score = fn stack ->
+  for c <- stack, reduce: 0 do
+    score ->
+      inc =
+        case c do
+          "(" -> 1
+          "[" -> 2
+          "{" -> 3
+          "<" -> 4
+        end
+
+      score * 5 + inc
+  end
+end
+
+scores = Keyword.take(validated, [:ok]) |> Enum.map(fn {_, v} -> complete_line_score.(v) end)
+
+index = (length(scores) / 2) |> round() |> trunc()
+
+scores
+|> Enum.sort()
+|> Enum.at(index - 1)
+```
