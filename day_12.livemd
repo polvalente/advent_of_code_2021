@@ -1,0 +1,164 @@
+# Day 12
+
+## Part 1
+
+```elixir
+input = """
+start-A
+start-b
+A-c
+A-b
+b-d
+A-end
+b-end
+"""
+
+input = """
+dc-end
+HN-start
+start-kj
+dc-start
+dc-HN
+LN-dc
+HN-end
+kj-sa
+kj-HN
+kj-dc
+"""
+
+input = """
+fs-end
+he-DX
+fs-he
+start-DX
+pj-DX
+end-zg
+zg-sl
+zg-pj
+pj-he
+RW-he
+fs-DX
+pj-RW
+zg-RW
+start-pj
+he-WI
+zg-he
+pj-fs
+start-RW
+"""
+
+# input = File.read!("inputs/day_12.txt")
+
+data =
+  input
+  |> String.split("\n", trim: true)
+  |> Enum.map(fn line -> line |> String.split("-") |> List.to_tuple() end)
+```
+
+```elixir
+graph = :digraph.new()
+
+Enum.each(data, fn {k, v} ->
+  :digraph.add_vertex(graph, k, [k])
+  :digraph.add_vertex(graph, v, [v])
+
+  :digraph.add_edge(graph, k, v)
+  :digraph.add_edge(graph, v, k)
+end)
+
+defmodule DFS do
+  def traverse(graph), do: traverse(graph, "start", "end", ["start"], MapSet.new())
+  def traverse(graph, start_node, target_node, travelled_nodes, paths)
+
+  def traverse(_graph, _, _, ["end" | _] = travelled_nodes, paths),
+    do: MapSet.put(paths, Enum.reverse(travelled_nodes))
+
+  def traverse(graph, start_node, target_node, travelled_nodes, paths) do
+    nodes =
+      :digraph.out_neighbours(graph, start_node) -- Enum.filter(travelled_nodes, &is_small?/1)
+
+    for node <- nodes, reduce: paths do
+      paths ->
+        traverse(graph, node, target_node, [node | travelled_nodes], paths)
+    end
+  end
+
+  defp is_small?(node) do
+    String.downcase(node) == node
+  end
+end
+
+paths = DFS.traverse(graph)
+
+IO.inspect(MapSet.size(paths), label: "len")
+paths
+```
+
+## Part 2
+
+```elixir
+defmodule DFS do
+  def traverse(graph) do
+    small_repetitions = graph |> :digraph.vertices() |> Map.new(&{&1, 0})
+
+    traverse(graph, "start", "end", ["start"], small_repetitions, MapSet.new())
+  end
+
+  def traverse(graph, start_node, target_node, travelled_nodes, small_repetitions, paths)
+
+  def traverse(_graph, _, _, ["end" | _] = travelled_nodes, _small_repetitions, paths),
+    do: MapSet.put(paths, Enum.reverse(travelled_nodes))
+
+  def traverse(graph, start_node, target_node, travelled_nodes, small_repetitions, paths) do
+    small_repetitions =
+      if is_small?(start_node) do
+        %{small_repetitions | start_node => small_repetitions[start_node] + 1}
+      else
+        small_repetitions
+      end
+
+    nodes = :digraph.out_neighbours(graph, start_node)
+
+    for node <- nodes, can_visit?(node, small_repetitions), reduce: paths do
+      paths ->
+        traverse(graph, node, target_node, [node | travelled_nodes], small_repetitions, paths)
+    end
+  end
+
+  defp is_small?(node) do
+    String.downcase(node) == node
+  end
+
+  defp can_visit?(node, repetitions) do
+    is_small = is_small?(node)
+
+    can_repeat_small =
+      repetitions
+      |> Enum.all?(fn {_, c} -> c < 2 end)
+
+    # IO.inspect(repetitions, label: "repetitions")
+    # IO.inspect(node, label: "node")
+    # IO.inspect(can_repeat_small, label: "can_repeat_small")
+    # IO.inspect(repetitions[node], label: "repetitions[node]")
+
+    cond do
+      node == "start" -> false
+      node == "end" -> true
+      not is_small -> true
+      can_repeat_small and repetitions[node] < 2 -> true
+      not can_repeat_small and repetitions[node] == 0 -> true
+      true -> false
+    end
+
+    # |> IO.inspect(label: "can visit")
+  end
+end
+
+paths = DFS.traverse(graph)
+
+IO.inspect(MapSet.size(paths), label: "len")
+
+# paths
+# |> Enum.sort_by(&Enum.join/1)
+# |> IO.inspect(limit: :infinity)
+```
