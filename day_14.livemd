@@ -1,0 +1,142 @@
+# Day 14
+
+## Part 1
+
+```elixir
+input = """
+NNCB
+
+CH -> B
+HH -> N
+CB -> H
+NH -> C
+HB -> C
+HC -> B
+HN -> C
+NN -> C
+BH -> H
+NC -> B
+NB -> B
+BN -> B
+BB -> N
+BC -> B
+CC -> N
+CN -> C
+"""
+
+input = File.read!("inputs/day_14.txt")
+
+[template, rules] = String.split(input, "\n\n", trim: true)
+
+rules =
+  rules
+  |> String.split("\n", trim: true)
+  |> Enum.map(fn line -> line |> String.split(" -> ", trim: true) end)
+```
+
+```elixir
+apply_rules = fn template, rules ->
+  pairs =
+    for <<c::binary-size(1) <- template>>, reduce: {[], ""} do
+      {_acc, ""} ->
+        {[], c}
+
+      {acc, prev} ->
+        {[prev <> c | acc], c}
+    end
+    |> elem(0)
+    |> Enum.reverse()
+
+  last_idx = length(pairs) - 1
+
+  pairs
+  |> Enum.map(fn pair ->
+    case Enum.find(rules, &(hd(&1) == pair)) do
+      [<<c1::binary-size(1), c2::binary-size(1)>>, c] ->
+        c1 <> c <> c2
+
+      _ ->
+        pair
+    end
+  end)
+  |> Enum.with_index(fn
+    pair, ^last_idx ->
+      pair
+
+    pair, _ ->
+      String.slice(pair, 0..-2)
+  end)
+  |> Enum.join()
+end
+
+iterated =
+  for _ <- 1..10, reduce: template do
+    str ->
+      apply_rules.(str, rules)
+  end
+
+freqs = iterated |> String.split("", trim: true) |> Enum.frequencies()
+
+{_, max} = Enum.max_by(freqs, &elem(&1, 1))
+{_, min} = Enum.min_by(freqs, &elem(&1, 1))
+
+max - min
+```
+
+```elixir
+get_pairs = fn s ->
+  for <<c::binary-size(1) <- s>>, reduce: {[], ""} do
+    {_acc, ""} ->
+      {[], c}
+
+    {acc, prev} ->
+      {[prev <> c | acc], c}
+  end
+  |> elem(0)
+  |> Enum.group_by(& &1)
+  |> Map.new(fn {k, v} -> {k, length(v)} end)
+end
+
+get_letters = fn s ->
+  for <<c::binary-size(1) <- s>>, reduce: %{} do
+    l ->
+      Map.update(l, c, 1, &(&1 + 1))
+  end
+end
+
+pairs = get_pairs.(template)
+
+inc_map = fn map, key, count ->
+  Map.update(map, key, count, &(&1 + count))
+end
+
+apply_rules = fn pairs, rules ->
+  Enum.reduce(pairs, %{}, fn {pair, count}, acc ->
+    <<c1::binary-size(1), c2::binary-size(1)>> = pair
+
+    c = rules[pair]
+
+    acc
+    |> inc_map.(c1 <> c, count)
+    |> inc_map.(c <> c2, count)
+  end)
+end
+
+pairs =
+  for _ <- 1..40, reduce: pairs do
+    p ->
+      apply_rules.(p, Map.new(rules, &List.to_tuple/1))
+  end
+
+last = template |> String.graphemes() |> List.last()
+
+freqs =
+  Enum.reduce(pairs, %{last => 1}, fn {<<c::binary-size(1), c2::binary>>, v}, acc ->
+    inc_map.(acc, c, v)
+  end)
+
+{_, max} = Enum.max_by(freqs, &elem(&1, 1))
+{_, min} = Enum.min_by(freqs, &elem(&1, 1))
+
+max - min
+```

@@ -1,0 +1,158 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# Day 13
+
+## Part 1
+
+```elixir
+Mix.install([{:nx, github: "elixir-nx/nx", sparse: "nx"}])
+```
+
+```output
+:ok
+```
+
+```elixir
+input = """
+6,10
+0,14
+9,10
+0,3
+10,4
+4,11
+6,0
+6,12
+4,1
+0,13
+10,12
+3,4
+3,0
+8,4
+1,10
+2,14
+8,10
+9,0
+
+fold along y=7
+fold along x=5
+"""
+
+input = File.read!("inputs/day_13.txt")
+
+[coords, folds] = input |> String.split("\n\n", trim: true)
+
+coords =
+  coords
+  |> String.split("\n", trim: true)
+  |> Enum.map(fn row -> row |> String.split(",", trim: true) |> Enum.map(&String.to_integer/1) end)
+  |> Nx.tensor()
+
+folds =
+  folds
+  |> String.split("\n", trim: true)
+  |> Enum.map(fn
+    "fold along y=" <> y -> {:y, String.to_integer(y)}
+    "fold along x=" <> x -> {:x, String.to_integer(x)}
+  end)
+```
+
+```output
+[x: 655, y: 447, x: 327, y: 223, x: 163, y: 111, x: 81, y: 55, x: 40, y: 27, y: 13, y: 6]
+```
+
+```elixir
+max_y =
+  coords
+  |> then(fn %{shape: {m, 2}} = t -> Nx.slice(t, [0, 1], [m, 1]) end)
+  |> Nx.reduce_max()
+  |> Nx.to_number()
+
+max_x =
+  coords
+  |> then(fn %{shape: {m, 2}} = t -> Nx.slice(t, [0, 0], [m, 1]) end)
+  |> Nx.reduce_max()
+  |> Nx.to_number()
+
+board =
+  Nx.indexed_add(
+    Nx.broadcast(0, {max_x + 1, max_y + 1}),
+    coords,
+    Nx.broadcast(1, {elem(coords.shape, 0)})
+  )
+
+fold = fn
+  {:x, x}, %{shape: {m, n}} = board ->
+    top = Nx.slice(board, [0, 0], [x, n])
+    bottom = Nx.slice(board, [x + 1, 0], [m - (x + 1), n])
+
+    reversed_bottom =
+      bottom
+      |> Nx.iota(axis: 0)
+      |> Nx.sort(direction: :desc)
+      |> then(fn idx -> Nx.take_along_axis(bottom, idx, axis: 0) end)
+
+    Nx.logical_or(top, reversed_bottom)
+
+  {:y, y}, %{shape: {m, n}} = board ->
+    left = Nx.slice(board, [0, 0], [m, y])
+    right = Nx.slice(board, [0, y + 1], [m, n - (y + 1)])
+
+    reversed_right =
+      right
+      |> Nx.iota(axis: 1)
+      |> Nx.sort(direction: :desc, axis: 1)
+      |> then(fn idx -> Nx.take_along_axis(right, idx, axis: 1) end)
+
+    Nx.logical_or(left, reversed_right)
+end
+
+folds
+|> Enum.take(1)
+|> Enum.reduce(board, fold)
+|> Nx.transpose()
+|> Nx.sum()
+```
+
+```output
+#Nx.Tensor<
+  u64
+  724
+>
+```
+
+## Part 2
+
+```elixir
+result =
+  folds
+  |> Enum.reduce(board, fold)
+  |> Nx.transpose()
+```
+
+```output
+#Nx.Tensor<
+  u8[6][40]
+  [
+    [0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0],
+    [1, 0, 0, 1, 0, 1, 0, 0, 1, 0, ...],
+    ...
+  ]
+>
+```
+
+```elixir
+Nx.to_heatmap(Nx.subtract(1, result))
+```
+
+```output
+#Nx.Heatmap<
+  u8[6][40]
+  
+  　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　
+  　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　
+  　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　
+  　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　
+  　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　
+  　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　
+>
+```
