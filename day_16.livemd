@@ -1,0 +1,99 @@
+# Day 16
+
+## Part 1
+
+```elixir
+defmodule Decoder do
+  def decode_packet(packet) do
+    IO.inspect(packet, label: "packet")
+
+    [v1, v2, v3, t1, t2, t3 | data] = from_hex_string(packet)
+
+    _version = Integer.undigits([v1, v2, v3], 2)
+    type_id = Integer.undigits([t1, t2, t3], 2)
+
+    case type_id do
+      4 -> decode_literal(data)
+      _ -> decode_operator(data)
+    end
+  end
+
+  defp decode_literal(data) do
+    Enum.reduce_while(data, {data, []}, fn
+      _, {[1, a, b, c, d | tl], acc} ->
+        {:cont,
+         {tl,
+          [
+            [a, b, c, d] | acc
+          ]}}
+
+      _, {[0, a, b, c, d | tl], acc} ->
+        {:halt,
+         {tl, [[a, b, c, d] | acc] |> Enum.reverse() |> List.flatten() |> Integer.undigits(2)}}
+    end)
+  end
+
+  defp decode_operator([0 | data]) do
+    {total_subpacket_length, tl} = Enum.split(data, 15)
+
+    {subpackets, _tl} = Enum.split(tl, Integer.undigits(total_subpacket_length, 2))
+
+    Enum.reduce_while(subpackets, {subpackets, []}, fn
+      _, {subpackets, packets} ->
+        subpackets
+        |> Integer.undigits(2)
+        |> as_hex_string()
+        |> decode_packet()
+        |> case do
+          {decoded, []} -> {:halt, Enum.reverse([decoded | packets])}
+          {decoded, data} -> {:cont, {data, [decoded | packets]}}
+        end
+    end)
+  end
+
+  # defp decode_operator([1 | data]) do
+  #   {total_subpacket_count, tl} = Enum.split(data, 11)
+  # end
+
+  defp as_hex_string(n) do
+    for x <- Integer.digits(n, 16), into: "" do
+      case x do
+        15 -> "F"
+        14 -> "E"
+        13 -> "D"
+        12 -> "C"
+        11 -> "B"
+        10 -> "A"
+        x -> to_string(x)
+      end
+    end
+  end
+
+  defp from_hex_string(s) do
+    List.flatten(
+      for <<x::binary-size(1) <- s>> do
+        case x do
+          "F" -> [1, 1, 1, 1]
+          "E" -> [1, 1, 1, 0]
+          "D" -> [1, 1, 0, 1]
+          "C" -> [1, 1, 0, 0]
+          "B" -> [1, 0, 1, 1]
+          "A" -> [1, 0, 1, 0]
+          "9" -> [1, 0, 0, 1]
+          "8" -> [1, 0, 0, 0]
+          "7" -> [0, 1, 1, 1]
+          "6" -> [0, 1, 1, 0]
+          "5" -> [0, 1, 0, 1]
+          "4" -> [0, 1, 0, 0]
+          "3" -> [0, 0, 1, 1]
+          "2" -> [0, 0, 1, 0]
+          "1" -> [0, 0, 0, 1]
+          "0" -> [0, 0, 0, 0]
+        end
+      end
+    )
+  end
+end
+
+Decoder.decode_packet("38006F45291200")
+```
