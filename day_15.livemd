@@ -1,0 +1,93 @@
+# Day 15
+
+## Part 1
+
+```elixir
+input = """
+1163751742
+1381373672
+2136511328
+3694931569
+7463417111
+1319128137
+1359912421
+3125421639
+1293138521
+2311944581
+"""
+
+input = File.read!("inputs/day_15.txt")
+
+nodes =
+  input
+  |> String.split("\n", trim: true)
+  |> Enum.with_index(fn line, x ->
+    line
+    |> String.graphemes()
+    |> Enum.with_index(fn item, y -> {{x, y}, String.to_integer(item)} end)
+  end)
+  |> List.flatten()
+  |> Map.new()
+```
+
+```elixir
+defmodule Djikstra do
+  def run(nodes) do
+    {source, dest} = Enum.min_max(Map.keys(nodes))
+    execute([{source, 0}], nodes, dest, Map.new(nodes, fn {k, _} -> {k, :inf} end))
+  end
+
+  defp execute([{dest, cost} | _], _nodes, dest, _costs), do: cost
+
+  defp execute(queue, nodes, dest, costs) do
+    [{node, cost} | queue_tl] = queue
+
+    node
+    |> next(nodes)
+    |> Enum.reduce({queue_tl, costs}, fn {coord, dist}, {queue, costs} ->
+      new_cost = cost + dist
+
+      if new_cost < costs[coord] do
+        {[{coord, new_cost} | queue], Map.put(costs, coord, new_cost)}
+      else
+        {queue, costs}
+      end
+    end)
+    |> then(fn {queue, costs} ->
+      queue
+      |> Enum.sort_by(fn {{x, y}, cost} -> {cost, x, y} end)
+      |> execute(nodes, dest, costs)
+    end)
+  end
+
+  defp next({x, y}, nodes) do
+    for coord <- [{x + 1, y}, {x - 1, y}, {x, y + 1}, {x, y - 1}],
+        dist <- [nodes[coord]],
+        not is_nil(dist) do
+      {coord, dist}
+    end
+  end
+end
+
+Djikstra.run(nodes)
+```
+
+```elixir
+defmodule TileNodes do
+  def run(nodes, reps) do
+    {max_x, max_y} = nodes |> Map.keys() |> Enum.max()
+
+    nodes
+    |> Enum.flat_map(fn {{x, y}, v} ->
+      for i <- 0..(reps - 1), j <- 0..(reps - 1) do
+        {{x + i * (max_x + 1), y + j * (max_y + 1)}, rem(v + i + j - 1, 9) + 1}
+      end
+    end)
+    |> Map.new()
+  end
+end
+
+nodes
+|> TileNodes.run(5)
+|> Djikstra.run()
+```
