@@ -4,18 +4,44 @@
 
 ```elixir
 defmodule Decoder do
+  defmodule Operator do
+    defstruct [:version, :type_id, :values]
+  end
+
+  defmodule Literal do
+    defstruct [:version, :type_id, :value]
+  end
+
+  def run(data) do
+    {rest, decoded} = decode_packet(data)
+
+    if Enum.all?(rest, &(&1 == 0)) do
+      {:ok, decoded}
+    else
+      {:error, {rest, decoded}}
+    end
+  end
+
   def decode_packet(packet) do
-    IO.inspect(packet, label: "packet")
+    [v1, v2, v3, t1, t2, t3 | data] =
+      if is_binary(packet) do
+        from_hex_string(packet)
+      else
+        packet
+      end
 
-    [v1, v2, v3, t1, t2, t3 | data] = from_hex_string(packet)
-
-    _version = Integer.undigits([v1, v2, v3], 2)
+    version = Integer.undigits([v1, v2, v3], 2)
     type_id = Integer.undigits([t1, t2, t3], 2)
 
-    case type_id do
+    type_id
+    |> case do
       4 -> decode_literal(data)
       _ -> decode_operator(data)
     end
+    |> then(fn
+      {data, value} ->
+        {data, %{value | version: version, type_id: type_id}}
+    end)
   end
 
   defp decode_literal(data) do
@@ -31,42 +57,52 @@ defmodule Decoder do
         {:halt,
          {tl, [[a, b, c, d] | acc] |> Enum.reverse() |> List.flatten() |> Integer.undigits(2)}}
     end)
+    |> then(fn {t, v} -> {t, %Literal{value: v}} end)
   end
 
   defp decode_operator([0 | data]) do
     {total_subpacket_length, tl} = Enum.split(data, 15)
 
-    {subpackets, _tl} = Enum.split(tl, Integer.undigits(total_subpacket_length, 2))
+    {subpackets, tl} = Enum.split(tl, Integer.undigits(total_subpacket_length, 2))
 
-    Enum.reduce_while(subpackets, {subpackets, []}, fn
-      _, {subpackets, packets} ->
-        subpackets
-        |> Integer.undigits(2)
-        |> as_hex_string()
-        |> decode_packet()
-        |> case do
-          {decoded, []} -> {:halt, Enum.reverse([decoded | packets])}
-          {decoded, data} -> {:cont, {data, [decoded | packets]}}
-        end
-    end)
+    decoded =
+      Enum.reduce_while(subpackets, {subpackets, []}, fn
+        _, {subpackets, packets} ->
+          subpackets
+          |> decode_packet()
+          |> case do
+            {[], decoded} -> {:halt, Enum.reverse([decoded | packets])}
+            {data, decoded} -> {:cont, {data, [decoded | packets]}}
+          end
+      end)
+
+    {tl, %Operator{values: decoded}}
   end
 
-  # defp decode_operator([1 | data]) do
-  #   {total_subpacket_count, tl} = Enum.split(data, 11)
-  # end
+  defp decode_operator([1 | data]) do
+    {subpacket_count_digits, subpackets} = Enum.split(data, 11)
 
-  defp as_hex_string(n) do
-    for x <- Integer.digits(n, 16), into: "" do
-      case x do
-        15 -> "F"
-        14 -> "E"
-        13 -> "D"
-        12 -> "C"
-        11 -> "B"
-        10 -> "A"
-        x -> to_string(x)
+    subpacket_count = Integer.undigits(subpacket_count_digits, 2)
+
+    {tl, decoded} =
+      if subpacket_count == 0 do
+        {subpackets, []}
+      else
+        Enum.reduce_while(subpackets, {subpackets, [], subpacket_count}, fn
+          _, {subpackets, packets, 0} ->
+            {:halt, {subpackets, Enum.reverse(packets)}}
+
+          _, {subpackets, packets, count} ->
+            subpackets
+            |> decode_packet()
+            |> case do
+              {[], decoded} -> {:halt, {[], Enum.reverse([decoded | packets])}}
+              {data, decoded} -> {:cont, {data, [decoded | packets], count - 1}}
+            end
+        end)
       end
-    end
+
+    {tl, %Operator{values: decoded}}
   end
 
   defp from_hex_string(s) do
@@ -95,5 +131,97 @@ defmodule Decoder do
   end
 end
 
-Decoder.decode_packet("38006F45291200")
+# Decoder.run("38006F45291200")
+# Decoder.run("EE00D40C823060")
+# Decoder.run("8A004A801A8002F478")
+```
+
+```elixir
+sum_versions = fn
+  %Decoder.Literal{version: version}, total, _sum_versions ->
+    total + version
+
+  %Decoder.Operator{version: version, values: values}, total, sum_versions ->
+    Enum.reduce(values, total + version, &sum_versions.(&1, &2, sum_versions))
+end
+
+# {:ok, data} = Decoder.run("A0016C880162017C3686B18A3D4780")
+input = "inputs/day_16.txt" |> File.read!() |> String.trim()
+
+{:ok, data} = Decoder.run(input)
+sum_versions.(data, 0, sum_versions)
+```
+
+## Part 2
+
+```elixir
+defmodule ParseTree do
+  alias Decoder.Literal, as: L
+  alias Decoder.Operator, as: O
+
+  def run(data) do
+    {:ok, decoded} = Decoder.run(data)
+
+    parse(decoded)
+  end
+
+  def parse(%L{value: value}), do: value
+
+  def parse(%O{type_id: 0, values: values}) do
+    values |> Enum.map(&parse/1) |> Enum.sum()
+  end
+
+  def parse(%O{type_id: 1, values: values}) do
+    values |> Enum.map(&parse/1) |> Enum.product()
+  end
+
+  def parse(%O{type_id: 2, values: values}) do
+    values |> Enum.map(&parse/1) |> Enum.min()
+  end
+
+  def parse(%O{type_id: 3, values: values}) do
+    values |> Enum.map(&parse/1) |> Enum.max()
+  end
+
+  def parse(%O{type_id: 5, values: values}) do
+    [v1, v2] = Enum.map(values, &parse/1)
+
+    if v1 > v2 do
+      1
+    else
+      0
+    end
+  end
+
+  def parse(%O{type_id: 6, values: values}) do
+    [v1, v2] = Enum.map(values, &parse/1)
+
+    if v1 < v2 do
+      1
+    else
+      0
+    end
+  end
+
+  def parse(%O{type_id: 7, values: values}) do
+    [v1, v2] = Enum.map(values, &parse/1)
+
+    if v1 == v2 do
+      1
+    else
+      0
+    end
+  end
+end
+
+3 = ParseTree.run("C200B40A82")
+54 = ParseTree.run("04005AC33890")
+7 = ParseTree.run("880086C3E88112")
+9 = ParseTree.run("CE00C43D881120")
+1 = ParseTree.run("D8005AC2A8F0")
+0 = ParseTree.run("F600BC2D8F")
+0 = ParseTree.run("9C005AC2F8F0")
+1 = ParseTree.run("9C0141080250320F1802104A08")
+
+ParseTree.run(input)
 ```
