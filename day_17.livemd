@@ -1,0 +1,88 @@
+# Day 17
+
+## Part 1
+
+```elixir
+defmodule Simulate do
+  def run({x, y} = target) do
+    max_x = Enum.max(x)
+    min_y = Enum.min(y)
+
+    vels =
+      for vx <- 1..max_x, vy <- -min_y..min_y do
+        {vx, vy}
+      end
+
+    Enum.find_value(vels, fn start_v ->
+      case run({0, 0}, start_v, target, 1000) do
+        {:ok, {_, _, y}} -> y
+        _ -> false
+      end
+    end)
+  end
+
+  def run_2({x, y} = target) do
+    max_x = Enum.max(x)
+    min_y = Enum.min(y)
+
+    vels =
+      for vx <- 1..max_x, vy <- -min_y..min_y do
+        {vx, vy}
+      end
+
+    Enum.filter(vels, fn start_v ->
+      case run({0, 0}, start_v, target, 1000) do
+        {:ok, {_, _, y}} -> y
+        _ -> false
+      end
+    end)
+  end
+
+  def run(start_pos, start_v, {x_range, y_range} = target, max_steps) do
+    Enum.reduce_while(1..max_steps, {start_pos, start_v, 0}, fn _, {{x, y}, {v_x, v_y}, max_y} ->
+      x = x + v_x
+      y = y + v_y
+
+      v_x =
+        cond do
+          v_x > 0 -> v_x - 1
+          v_x < 0 -> v_x + 1
+          :otherwise -> 0
+        end
+
+      v_y = v_y - 1
+
+      max_y = max(max_y, y)
+
+      result = {{x, y}, {v_x, v_y}, max(max_y, y)}
+
+      cond do
+        x in x_range and y in y_range ->
+          {:halt, {:ok, result}}
+
+        not can_continue?(result, target) ->
+          {:halt, :error}
+
+        :otherwise ->
+          {:cont, result}
+      end
+    end)
+  end
+
+  defp can_continue?({{x, y}, {v_x, v_y}, _}, {target_x, target_y}) do
+    x <= Enum.max(target_x) + 1 and not (v_x == 0 and x < Enum.min(target_x)) and
+      not (x > Enum.min(target_x) and y < Enum.min(target_y))
+  end
+end
+```
+
+```elixir
+# Simulate.run({0, 0}, {7, 2}, {20..30, -10..-5}, 1000)
+45 = Simulate.run({20..30, -10..-5})
+
+# target area: x=282..314, y=-80..-45
+
+Simulate.run({282..314, -80..-45}) |> IO.inspect(label: "Part 1")
+Simulate.run_2({282..314, -80..-45}) |> length() |> IO.inspect(label: "Part 2")
+nil
+```
