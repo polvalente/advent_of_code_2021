@@ -1,0 +1,240 @@
+# Day 18
+
+## Part 1
+
+```elixir
+defmodule Snailfish do
+  def add(l, r) do
+    flat_l = to_flat_with_depth(l, -1)
+    flat_r = to_flat_with_depth(r, -1)
+
+    inc_depth = fn {v, d} -> {v, d + 1} end
+    concat = Enum.map(flat_l, inc_depth) ++ Enum.map(flat_r, inc_depth)
+
+    reduce(concat, nil)
+  end
+
+  defp to_flat_with_depth([h | _] = l, -1) when is_tuple(h), do: l
+
+  defp to_flat_with_depth(x, depth) when is_number(x) do
+    {x, depth}
+  end
+
+  defp to_flat_with_depth([l, r], depth) do
+    List.flatten([to_flat_with_depth(l, depth + 1), to_flat_with_depth(r, depth + 1)])
+  end
+
+  def reduce(p, p), do: p
+
+  def reduce(p, _prev) do
+    case explode(p) do
+      ^p -> p |> split() |> reduce(p)
+      exploded -> reduce(exploded, p)
+    end
+  end
+
+  defp explode(p), do: explode(p, p, 0)
+
+  defp explode([], result, _index), do: result
+
+  defp explode([{value, 4} | _], result, i) do
+    if i > 0 do
+      {prev_val, prev_depth} = Enum.at(result, i - 1)
+      List.replace_at(result, i - 1, {prev_val + value, prev_depth})
+    else
+      result
+    end
+    |> then(fn result ->
+      if i + 2 < length(result) do
+        {prev_val, prev_depth} = Enum.at(result, i + 2)
+        {r, _} = Enum.at(result, i + 1)
+        List.replace_at(result, i + 2, {prev_val + r, prev_depth})
+      else
+        result
+      end
+    end)
+    |> List.delete_at(i + 1)
+    |> List.replace_at(i, {0, 3})
+  end
+
+  defp explode([_ | tl], result, i), do: explode(tl, result, i + 1)
+
+  def split(p), do: split(p, [])
+  def split([], acc), do: Enum.reverse(acc)
+
+  def split([{v, d} | tl], acc) when is_number(v) and v >= 10 do
+    List.flatten([Enum.reverse(acc), {div(v, 2), d + 1}, {div(v, 2) + rem(v, 2), d + 1} | tl])
+  end
+
+  def split([h | tl], acc), do: split(tl, [h | acc])
+
+  def magnitude_from_flatlist(l, depth \\ 3)
+
+  def magnitude_from_flatlist([{val, _}, {val2, _}], 0), do: val * 3 + val2 * 2
+
+  def magnitude_from_flatlist(l, depth) do
+    next_l = do_mag(l, l, depth, 0)
+
+    if next_l == l do
+      magnitude_from_flatlist(next_l, depth - 1)
+    else
+      magnitude_from_flatlist(next_l, depth)
+    end
+  end
+
+  defp do_mag([], acc, _d, _i), do: acc
+
+  defp do_mag([{v, d} | _tl], acc, d, i) do
+    {v2, _} = Enum.at(acc, i + 1)
+
+    acc
+    |> List.replace_at(i, {v * 3 + v2 * 2, d - 1})
+    |> List.delete_at(i + 1)
+  end
+
+  defp do_mag([_h | tl], acc, d, i), do: do_mag(tl, acc, d, i + 1)
+end
+```
+
+```elixir
+# Add test
+
+[{0, 3}, {7, 3}, {4, 2}, {7, 3}, {8, 3}, {6, 3}, {0, 3}, {8, 1}, {1, 1}] =
+  Snailfish.add([[[[4, 3], 4], 4], [7, [[8, 4], 9]]], [1, 1])
+```
+
+```elixir
+input = """
+[1,2]
+[[1,2],3]
+[9,[8,7]]
+[[1,9],[8,5]]
+[[[[1,2],[3,4]],[[5,6],[7,8]]],9]
+[[[9,[3,8]],[[0,9],6]],[[[3,7],[4,9]],3]]
+[[[[1,3],[5,3]],[[1,3],[8,7]]],[[[4,9],[6,9]],[[8,2],[7,3]]]]
+"""
+
+data = input |> String.split("\n", trim: true) |> Enum.map(&(&1 |> Code.eval_string() |> elem(0)))
+
+defmodule Run do
+  def run([h | tl]) do
+    Enum.reduce(tl, h, &Snailfish.add(&2, &1))
+  end
+end
+```
+
+```elixir
+[{1, 3}, {1, 3}, {2, 3}, {2, 3}, {3, 2}, {3, 2}, {4, 1}, {4, 1}] =
+  Run.run([
+    [1, 1],
+    [2, 2],
+    [3, 3],
+    [4, 4]
+  ])
+
+[{3, 3}, {0, 3}, {5, 3}, {3, 3}, {4, 2}, {4, 2}, {5, 1}, {5, 1}] =
+  Run.run([
+    [1, 1],
+    [2, 2],
+    [3, 3],
+    [4, 4],
+    [5, 5]
+  ])
+
+[{5, 3}, {0, 3}, {7, 3}, {4, 3}, {5, 2}, {5, 2}, {6, 1}, {6, 1}] =
+  Run.run([
+    [1, 1],
+    [2, 2],
+    [3, 3],
+    [4, 4],
+    [5, 5],
+    [6, 6]
+  ])
+
+input = """
+[[[0,[4,5]],[0,0]],[[[4,5],[2,6]],[9,5]]]
+[7,[[[3,7],[4,3]],[[6,3],[8,8]]]]
+[[2,[[0,8],[3,4]]],[[[6,7],1],[7,[1,6]]]]
+[[[[2,4],7],[6,[0,5]]],[[[6,8],[2,8]],[[2,1],[4,5]]]]
+[7,[5,[[3,8],[1,4]]]]
+[[2,[2,2]],[8,[8,1]]]
+[2,9]
+[1,[[[9,3],9],[[9,0],[0,7]]]]
+[[[5,[7,4]],7],1]
+[[[[4,2],2],6],[8,7]]
+"""
+
+data = input |> String.split("\n", trim: true) |> Enum.map(&(&1 |> Code.eval_string() |> elem(0)))
+
+# Snailfish.add(Enum.at(data, 0), Enum.at(data, 1))
+# |> Snailfish.add(Enum.at(data, 2))
+
+# Run.run(data)
+[
+  {8, 3},
+  {7, 3},
+  {7, 3},
+  {7, 3},
+  {8, 3},
+  {6, 3},
+  {7, 3},
+  {7, 3},
+  {0, 3},
+  {7, 3},
+  {6, 3},
+  {6, 3},
+  {8, 2},
+  {7, 2}
+] =
+  Run.run([
+    [[[0, [4, 5]], [0, 0]], [[[4, 5], [2, 6]], [9, 5]]],
+    [7, [[[3, 7], [4, 3]], [[6, 3], [8, 8]]]],
+    [[2, [[0, 8], [3, 4]]], [[[6, 7], 1], [7, [1, 6]]]],
+    [[[[2, 4], 7], [6, [0, 5]]], [[[6, 8], [2, 8]], [[2, 1], [4, 5]]]],
+    [7, [5, [[3, 8], [1, 4]]]],
+    [[2, [2, 2]], [8, [8, 1]]],
+    [2, 9],
+    [1, [[[9, 3], 9], [[9, 0], [0, 7]]]],
+    [[[5, [7, 4]], 7], 1],
+    [[[[4, 2], 2], 6], [8, 7]]
+  ])
+
+4140 =
+  [
+    [[[0, [5, 8]], [[1, 7], [9, 6]]], [[4, [1, 2]], [[1, 4], 2]]],
+    [[[5, [2, 8]], 4], [5, [[9, 9], 0]]],
+    [6, [[[6, 2], [5, 6]], [[7, 6], [4, 7]]]],
+    [[[6, [0, 7]], [0, 9]], [4, [9, [9, 0]]]],
+    [[[7, [6, 4]], [3, [1, 3]]], [[[5, 5], 1], 9]],
+    [[6, [[7, 3], [3, 2]]], [[[3, 8], [5, 7]], 4]],
+    [[[[5, 4], [7, 7]], 8], [[8, 3], 8]],
+    [[9, 3], [[9, 9], [6, [4, 9]]]],
+    [[2, [[7, 7], 7]], [[5, 8], [[9, 3], [0, 2]]]],
+    [[[[5, 2], 5], [8, [3, 7]]], [[5, [7, 5]], [4, 4]]]
+  ]
+  |> Run.run()
+  |> Snailfish.magnitude_from_flatlist()
+```
+
+```elixir
+data =
+  "inputs/day_18.txt"
+  |> File.read!()
+  |> String.split("\n", trim: true)
+  |> Enum.map(&(&1 |> Code.eval_string() |> elem(0)))
+
+data
+|> Run.run()
+|> Snailfish.magnitude_from_flatlist()
+```
+
+```elixir
+# Part 2
+for d1 <- data, d2 <- data, d1 != d2, reduce: 0 do
+  mag ->
+    d1
+    |> Snailfish.add(d2)
+    |> Snailfish.magnitude_from_flatlist()
+    |> max(mag)
+end
+```
