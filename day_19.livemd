@@ -1,0 +1,78 @@
+# Day 19
+
+## Part 1
+
+```elixir
+Mix.install([
+  {:nx, ">= 0.0.0", github: "elixir-nx/nx", sparse: "nx", branch: "main"},
+  {:kino, "~> 0.4.1"}
+])
+```
+
+```elixir
+input = Kino.Input.textarea("input")
+```
+
+```elixir
+data =
+  input
+  |> Kino.Input.read()
+  |> String.split("\n\n", trim: true)
+  |> Map.new(fn scanner ->
+    [scanner_number, coords] =
+      scanner
+      |> String.trim_leading("--- scanner ")
+      |> String.split(" ---\n")
+
+    coords =
+      coords
+      |> String.split("\n", trim: true)
+      |> Enum.map(fn line ->
+        line |> String.split(",") |> Enum.map(&String.to_integer/1) |> Nx.tensor()
+      end)
+
+    {String.to_integer(scanner_number), coords}
+  end)
+```
+
+```elixir
+defmodule Scanners do
+  def get_diffs(coords) do
+    for x <- coords, y <- coords, x != y do
+      x |> Nx.subtract(y) |> Nx.abs()
+    end
+  end
+
+  def beacon_mappings(data) do
+    for {name1, coords1} <- data, {name2, coords2} <- data, name1 != name2 do
+      diffs1 = coords1 |> get_diffs() |> Enum.with_index()
+      diffs2 = coords2 |> get_diffs() |> Enum.with_index()
+
+      equal_diffs =
+        Map.new(
+          for {x, idx1} <- diffs1, {y, idx2} <- diffs2, x == y do
+            {{idx1, idx2}, x}
+          end
+        )
+
+      if map_size(equal_diffs) >= 66 do
+        {{max(name1, name2), min(name1, name2)}, equal_diffs}
+      else
+        {{max(name1, name2), min(name1, name2)}, []}
+      end
+    end
+    |> Map.new()
+    |> Map.filter(fn {_, x} -> x != [] end)
+  end
+
+  def find_beacons(data) do
+    mapping = beacon_mappings(data)
+
+    for {k1, d1} <- mapping, {k2, d2} <- mapping, k1 != k2, d1 == d2 do
+      {k1, k2, d1}
+    end
+  end
+end
+
+Scanners.find_beacons(data)
+```
